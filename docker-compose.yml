@@ -1,0 +1,66 @@
+services:
+  db:
+    image: postgres:16
+    container_name: habit-postgres
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1234
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - habit-network
+
+  user-service:
+    build: ./user-service
+    container_name: user-service
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/app
+      DB_USER: postgres
+      DB_PASS: "1234"
+      PORT: 8081
+    ports:
+      - "8081:8081"
+    depends_on:
+      - db
+    networks:
+      - habit-network
+
+  habit-service:
+    build: ./habit-service
+    container_name: habit-service
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/app
+      DB_USER: postgres
+      DB_PASS: "1234"
+      PORT: 8082
+    ports:
+      - "8082:8082"
+    depends_on:
+      - db
+    networks:
+      - habit-network
+
+  api-gateway:
+    build: ./api-gateway
+    container_name: api-gateway
+    environment:
+      USER_SERVICE_URL: http://user-service:8081
+      HABIT_SERVICE_URL: http://habit-service:8082
+      PORT: 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      - user-service
+      - habit-service
+    networks:
+      - habit-network
+
+volumes:
+  db_data:
+
+networks:
+  habit-network:
+    driver: bridge
