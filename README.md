@@ -34,3 +34,7 @@
 - curl -X POST http://localhost:8080/habits -H "Content-Type: application/json" -d "{\"userId\":1,\"title\":\"Drink water\"}"
 4. Получить список привычек
 - curl http://localhost:8080/habits
+## Скриншоты работы системы
+- **Запуск Docker Compose:** ![Docker PS](docs/screenshots/1_docker_ps.png)
+- **Проверка API (создание пользователей и привычек):** ![API Requests](docs/screenshots/2_api_requests.png)
+- **Данные в PostgreSQL:** ![Database](docs/screenshots/3_database.png)
