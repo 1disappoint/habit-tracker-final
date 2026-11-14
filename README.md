@@ -28,6 +28,8 @@
 
 Каждый сервис — отдельное Java-приложение с собственным пулом соединений HikariCP и health-эндпоинтом.
 
+Подробное описание по методологии C4 (Context, Container, Component) — в [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md).
+
 ## Технологии
 
 | Компонент | Версия |
@@ -49,6 +51,7 @@ habit-tracker/
 ├── user-service/           # сервис пользователей
 ├── habit-service/          # сервис привычек
 ├── db/init.sql             # начальная схема БД
+├── docs/architecture/      # C4-описание архитектуры
 ├── docker-compose.yml
 ├── .env.example
 └── pom.xml                 # родительский POM
