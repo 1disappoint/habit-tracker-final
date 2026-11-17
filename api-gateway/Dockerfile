@@ -5,6 +5,7 @@ COPY pom.xml .
 COPY api-gateway/pom.xml api-gateway/pom.xml
 COPY user-service/pom.xml user-service/pom.xml
 COPY habit-service/pom.xml habit-service/pom.xml
+COPY tracking-service/pom.xml tracking-service/pom.xml
 
 RUN mvn -B -q -pl api-gateway -am dependency:go-offline
 

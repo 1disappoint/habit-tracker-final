@@ -16,6 +16,7 @@
         <module>api-gateway</module>
         <module>user-service</module>
         <module>habit-service</module>
+        <module>tracking-service</module>
     </modules>
 
     <properties>

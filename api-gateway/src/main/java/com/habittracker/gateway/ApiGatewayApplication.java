@@ -36,7 +36,11 @@ public final class ApiGatewayApplication {
         app.post("/users", ctx -> proxy.forward(ctx, config.userServiceUrl(), "/users", "POST"));
 
         app.get("/habits", ctx -> proxy.forward(ctx, config.habitServiceUrl(), "/habits", "GET"));
+        app.get("/habits/{id}", ctx -> proxy.forward(ctx, config.habitServiceUrl(), ctx.path(), "GET"));
         app.post("/habits", ctx -> proxy.forward(ctx, config.habitServiceUrl(), "/habits", "POST"));
+
+        app.get("/trackings", ctx -> proxy.forward(ctx, config.trackingServiceUrl(), "/trackings", "GET"));
+        app.post("/trackings", ctx -> proxy.forward(ctx, config.trackingServiceUrl(), "/trackings", "POST"));
 
         app.exception(ApiException.class, (exception, ctx) ->
                 ctx.status(exception.status()).json(new ErrorResponse(exception.getMessage())));
@@ -44,7 +48,14 @@ public final class ApiGatewayApplication {
             log.error("Unhandled gateway error", exception);
             ctx.status(500).json(new ErrorResponse("Internal server error"));
         });
-        app.error(404, ctx -> ctx.status(404).json(new ErrorResponse("Resource not found")));
+        app.error(404, ctx -> {
+            // Не перезаписываем ответ, если его уже вернул внутренний сервис.
+            String existing = ctx.result();
+            if (existing != null && existing.trim().startsWith("{")) {
+                return;
+            }
+            ctx.status(404).json(new ErrorResponse("Resource not found"));
+        });
 
         Runtime.getRuntime().addShutdownHook(new Thread(app::stop, "gateway-shutdown"));
 

@@ -6,6 +6,7 @@ public record GatewayConfig(
         int port,
         String userServiceUrl,
         String habitServiceUrl,
+        String trackingServiceUrl,
         String corsAllowedOrigin,
         Duration requestTimeout
 ) {
@@ -15,6 +16,7 @@ public record GatewayConfig(
                 intEnv("PORT", 8080),
                 urlEnv("USER_SERVICE_URL", "http://localhost:8081"),
                 urlEnv("HABIT_SERVICE_URL", "http://localhost:8082"),
+                urlEnv("TRACKING_SERVICE_URL", "http://localhost:8083"),
                 env("CORS_ALLOWED_ORIGIN", "*"),
                 Duration.ofSeconds(intEnv("REQUEST_TIMEOUT_SECONDS", 10))
         );

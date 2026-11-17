@@ -16,6 +16,7 @@ public final class HabitController {
 
     public void register(Javalin app) {
         app.get("/habits", this::findAll);
+        app.get("/habits/{id}", this::findById);
         app.post("/habits", this::create);
     }
 
@@ -23,10 +24,24 @@ public final class HabitController {
         ctx.json(repository.findAll());
     }
 
+    private void findById(Context ctx) {
+        int id = parseId(ctx);
+        ctx.json(repository.findById(id)
+                .orElseThrow(() -> new ApiException(404, "Habit with id " + id + " not found")));
+    }
+
     private void create(Context ctx) {
         CreateHabitRequest request = parseBody(ctx);
         request.validate();
         ctx.status(201).json(repository.create(request));
+    }
+
+    private static int parseId(Context ctx) {
+        try {
+            return ctx.pathParamAsClass("id", Integer.class).get();
+        } catch (Exception exception) {
+            throw new ApiException(400, "Path parameter 'id' must be an integer");
+        }
     }
 
     private static CreateHabitRequest parseBody(Context ctx) {

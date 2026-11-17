@@ -11,10 +11,12 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 public final class HabitRepository {
 
     private static final String FIND_ALL_SQL = "SELECT id, user_id, title FROM habits ORDER BY id";
+    private static final String FIND_BY_ID_SQL = "SELECT id, user_id, title FROM habits WHERE id = ?";
     private static final String INSERT_SQL = "INSERT INTO habits (user_id, title) VALUES (?, ?) RETURNING id";
 
     private final Database database;
@@ -39,6 +41,27 @@ public final class HabitRepository {
             return habits;
         } catch (SQLException exception) {
             throw new DataAccessException("Failed to load habits", exception);
+        }
+    }
+
+    public Optional<Habit> findById(int id) {
+        try (Connection connection = database.connection();
+             PreparedStatement statement = connection.prepareStatement(FIND_BY_ID_SQL)) {
+
+            statement.setInt(1, id);
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (!resultSet.next()) {
+                    return Optional.empty();
+                }
+                return Optional.of(new Habit(
+                        resultSet.getInt("id"),
+                        resultSet.getInt("user_id"),
+                        resultSet.getString("title")
+                ));
+            }
+        } catch (SQLException exception) {
+            throw new DataAccessException("Failed to load habit " + id, exception);
         }
     }
 

@@ -80,6 +80,7 @@ services:
     environment:
       USER_SERVICE_URL: http://user-service:8081
       HABIT_SERVICE_URL: http://habit-service:8082
+      TRACKING_SERVICE_URL: http://tracking-service:8083
       PORT: 8080
       REQUEST_TIMEOUT_SECONDS: ${REQUEST_TIMEOUT_SECONDS:-10}
       CORS_ALLOWED_ORIGIN: "${CORS_ALLOWED_ORIGIN:-*}"
@@ -90,6 +91,8 @@ services:
         condition: service_healthy
       habit-service:
         condition: service_healthy
+      tracking-service:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/health >/dev/null 2>&1 || exit 1"]
       interval: 10s
@@ -99,6 +102,36 @@ services:
     restart: unless-stopped
     networks:
       - habit-network
+
+  tracking-service:
+    build:
+      context: .
+      dockerfile: tracking-service/Dockerfile
+    container_name: tracking-service
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-app}
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASS: ${POSTGRES_PASSWORD:-1234}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+      HABIT_SERVICE_URL: http://habit-service:8082
+      PORT: 8083
+    ports:
+      - "8083:8083"
+    depends_on:
+      db:
+        condition: service_healthy
+      habit-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8083/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - habit-network
+
 
 volumes:
   db_data:

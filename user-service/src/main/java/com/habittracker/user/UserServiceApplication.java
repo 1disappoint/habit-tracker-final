@@ -46,7 +46,14 @@ public final class UserServiceApplication {
             log.error("Unhandled error in user-service", exception);
             ctx.status(500).json(new ErrorResponse("Internal server error"));
         });
-        app.error(404, ctx -> ctx.status(404).json(new ErrorResponse("Resource not found")));
+        app.error(404, ctx -> {
+            // Не перезаписываем тело, если его уже установил контроллер.
+            String existing = ctx.result();
+            if (existing != null && existing.trim().startsWith("{")) {
+                return;
+            }
+            ctx.status(404).json(new ErrorResponse("Resource not found"));
+        });
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             log.info("Stopping user-service");
