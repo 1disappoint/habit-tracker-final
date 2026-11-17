@@ -4,6 +4,7 @@ import com.habittracker.tracking.error.ApiException;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -50,11 +51,22 @@ class CreateTrackingRequestTest {
     void rejectsFutureDate() {
         CreateTrackingRequest request = new CreateTrackingRequest(
                 1,
-                LocalDate.now().plusDays(1).toString()
+                LocalDate.now(ZoneOffset.UTC).plusDays(5).toString()
         );
 
         ApiException exception = assertThrows(ApiException.class, request::validate);
 
         assertEquals(400, exception.status());
+    }
+
+    @Test
+    void allowsTodayInAnyTimeZone() {
+        // Клиент может быть в UTC+14: его «сегодня» на день впереди UTC.
+        CreateTrackingRequest request = new CreateTrackingRequest(
+                1,
+                LocalDate.now(ZoneOffset.UTC).plusDays(1).toString()
+        );
+
+        assertDoesNotThrow(request::validate);
     }
 }
