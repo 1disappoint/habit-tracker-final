@@ -1,0 +1,35 @@
+@startuml context
+!pragma layout smetana
+title Habit Tracker — System Context (C4 Level 1)
+
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 13
+skinparam componentStyle rectangle
+skinparam roundCorner 14
+skinparam ArrowColor #4A6FA5
+skinparam ArrowFontColor #33506F
+skinparam rectangle {
+  BackgroundColor #FFFFFF
+  BorderColor #4A6FA5
+}
+skinparam actor {
+  BackgroundColor #E8EFF8
+  BorderColor #4A6FA5
+}
+skinparam database {
+  BackgroundColor #FFF4E5
+  BorderColor #C8873A
+}
+
+actor "Клиент\n(curl, SPA, Postman)" as client
+
+rectangle "Habit Tracker\nМикросервисная система" as system {
+  component "REST API\n/users, /habits, /trackings\nJSON over HTTP" as api
+}
+
+database "PostgreSQL 16\nпользователи, привычки, отметки" as db
+
+client --> system : "HTTP-запросы"
+system --> db : "JDBC / jOOQ"
+@enduml

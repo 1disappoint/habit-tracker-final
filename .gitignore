@@ -7,3 +7,7 @@ target/
 dependency-reduced-pom.xml
 .DS_Store
 Thumbs.db
+
+# Локальные секреты: в git только *.example
+config/secrets/*
+!config/secrets/*.example

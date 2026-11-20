@@ -1,0 +1,41 @@
+@startuml sequence-create-tracking
+title Создание отметки: POST /trackings/create
+
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 12
+skinparam ArrowColor #4A6FA5
+skinparam ArrowFontColor #33506F
+skinparam sequence {
+  ParticipantBackgroundColor #E8EFF8
+  ParticipantBorderColor #4A6FA5
+  LifeLineBorderColor #9FB3CC
+  ActorBackgroundColor #FFF4E5
+  ActorBorderColor #C8873A
+}
+
+actor "Клиент" as client
+participant "api-gateway" as gw
+participant "tracking-service" as tracking
+participant "habit-service" as habit
+database "PostgreSQL" as db
+
+client -> gw : POST /trackings/create\n{"habitId":1,"completedOn":"2026-11-20"}
+gw -> tracking : маршрут /trackings/**
+tracking -> tracking : валидация DTO\nдата не в будущем
+tracking -> habit : Feign GET /habits/1
+alt привычка найдена
+  habit --> tracking : 200 {"id":1,...}
+  tracking -> db : INSERT INTO trackings ... RETURNING id
+  db --> tracking : id
+  tracking --> gw : 201 {"id":1,"habitId":1,"completedOn":"2026-11-20"}
+  gw --> client : 201 Created
+else привычки нет
+  habit --> tracking : 404
+  tracking --> gw : 422 {"error":"Habit with id 1 does not exist"}
+  gw --> client : 422 Unprocessable Entity
+else habit-service недоступен
+  tracking --> gw : 502 {"error":"Upstream service is unavailable"}
+  gw --> client : 502 Bad Gateway
+end
+@enduml

@@ -3,16 +3,17 @@ services:
     image: postgres:16
     container_name: habit-postgres
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-app}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-1234}
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: app
+      # Логин не секрет; пароль читается из файла-секрета.
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
     volumes:
       - db_data:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d app"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -26,22 +27,23 @@ services:
       dockerfile: user-service/Dockerfile
     container_name: user-service
     environment:
-      DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-app}
-      DB_USER: ${POSTGRES_USER:-postgres}
-      DB_PASS: ${POSTGRES_PASSWORD:-1234}
-      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
-      PORT: 8081
-    ports:
-      - "8081:8081"
+      DB_URL: jdbc:postgresql://db:5432/app
+      # Креды приходят файлом, а не переменными окружения.
+      CREDENTIALS_FILE: /run/secrets/db-credentials.properties
+    volumes:
+      # Spring определяет формат файла по расширению, поэтому монтируем именно *.properties.
+      - ./config/secrets/db-credentials.properties:/run/secrets/db-credentials.properties:ro
+    expose:
+      - "8081"
     depends_on:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8081/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8081/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 5
-      start_period: 20s
+      start_period: 30s
     restart: unless-stopped
     networks:
       - habit-network
@@ -52,22 +54,24 @@ services:
       dockerfile: habit-service/Dockerfile
     container_name: habit-service
     environment:
-      DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-app}
-      DB_USER: ${POSTGRES_USER:-postgres}
-      DB_PASS: ${POSTGRES_PASSWORD:-1234}
-      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
-      PORT: 8082
-    ports:
-      - "8082:8082"
+      DB_URL: jdbc:postgresql://db:5432/app
+      CREDENTIALS_FILE: /run/secrets/db-credentials.properties
+      USER_SERVICE_URL: http://user-service:8081
+    volumes:
+      - ./config/secrets/db-credentials.properties:/run/secrets/db-credentials.properties:ro
+    expose:
+      - "8082"
     depends_on:
       db:
         condition: service_healthy
+      user-service:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8082/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8082/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 5
-      start_period: 20s
+      start_period: 30s
     restart: unless-stopped
     networks:
       - habit-network
@@ -82,8 +86,8 @@ services:
       HABIT_SERVICE_URL: http://habit-service:8082
       TRACKING_SERVICE_URL: http://tracking-service:8083
       PORT: 8080
-      REQUEST_TIMEOUT_SECONDS: ${REQUEST_TIMEOUT_SECONDS:-10}
       CORS_ALLOWED_ORIGIN: "${CORS_ALLOWED_ORIGIN:-*}"
+      GATEWAY_RESPONSE_TIMEOUT: ${GATEWAY_RESPONSE_TIMEOUT:-10s}
     ports:
       - "8080:8080"
     depends_on:
@@ -94,11 +98,11 @@ services:
       tracking-service:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 5
-      start_period: 10s
+      start_period: 20s
     restart: unless-stopped
     networks:
       - habit-network
@@ -109,25 +113,24 @@ services:
       dockerfile: tracking-service/Dockerfile
     container_name: tracking-service
     environment:
-      DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-app}
-      DB_USER: ${POSTGRES_USER:-postgres}
-      DB_PASS: ${POSTGRES_PASSWORD:-1234}
-      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+      DB_URL: jdbc:postgresql://db:5432/app
+      CREDENTIALS_FILE: /run/secrets/db-credentials.properties
       HABIT_SERVICE_URL: http://habit-service:8082
-      PORT: 8083
-    ports:
-      - "8083:8083"
+    volumes:
+      - ./config/secrets/db-credentials.properties:/run/secrets/db-credentials.properties:ro
+    expose:
+      - "8083"
     depends_on:
       db:
         condition: service_healthy
       habit-service:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8083/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8083/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 5
-      start_period: 20s
+      start_period: 30s
     restart: unless-stopped
     networks:
       - habit-network
@@ -139,3 +142,9 @@ volumes:
 networks:
   habit-network:
     driver: bridge
+
+# Файлы с секретами не попадают в git (см. .gitignore).
+# Скопируйте *.example и подставьте свои значения.
+secrets:
+  postgres_password:
+    file: ./config/secrets/postgres-password.txt
