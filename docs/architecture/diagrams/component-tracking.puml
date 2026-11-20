@@ -1,0 +1,60 @@
+@startuml component-tracking
+!pragma layout smetana
+title tracking-service — Components (C4 Level 3)
+left to right direction
+
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 12
+skinparam componentStyle rectangle
+skinparam roundCorner 10
+skinparam ArrowColor #4A6FA5
+skinparam ArrowFontColor #33506F
+skinparam package {
+  BackgroundColor #FAFBFD
+  BorderColor #9FB3CC
+}
+skinparam component {
+  BackgroundColor #E8EFF8
+  BorderColor #4A6FA5
+}
+
+package "api" {
+  component "TrackingController" as controller
+  component "CreateTrackingRequest\n(Bean Validation)" as req
+  component "ApplicationExceptionHandler" as advice
+}
+
+package "application" {
+  component "TrackingApplicationService\n@Transactional" as service
+  component "TrackingResponse" as resp
+}
+
+package "domain" {
+  component "Tracking\nrecord" as model
+  component "TrackingRepository\nпорт" as port
+  component "HabitDirectory\nпорт" as habitPort
+}
+
+package "infrastructure" {
+  component "PostgresTrackingRepository\njOOQ" as repo
+  component "HabitClient\n@FeignClient" as feign
+  component "FeignHabitDirectory" as adapter
+}
+
+database "PostgreSQL\ntrackings" as db
+component "habit-service\n:8082" as habit
+
+controller --> req
+controller --> service
+controller ..> advice
+service --> port
+service --> habitPort
+service --> resp
+service --> model
+port <|.. repo
+repo --> db : "SQL"
+habitPort <|.. adapter
+adapter --> feign
+feign --> habit : "GET /habits/{id}"
+@enduml

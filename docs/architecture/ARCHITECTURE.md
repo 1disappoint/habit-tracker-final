@@ -1,74 +1,150 @@
 # Архитектура Habit Tracker
 
-Документ описывает архитектуру системы по методологии **C4** (Context → Container → Component).
-Каждый уровень даёт свой взгляд на систему: от внешнего окружения до внутренних компонентов одного сервиса.
+Описание системы по методологии **C4**: от внешнего окружения до внутренних компонентов сервиса.
+
+Все диаграммы — **PlantUML**. Исходники лежат в [`diagrams/`](diagrams), готовые SVG — рядом с ними.
 
 Содержание:
 
 - [Уровень 1: System Context](#уровень-1-system-context)
 - [Уровень 2: Container](#уровень-2-container)
 - [Уровень 3: Component](#уровень-3-component)
+- [Динамика: создание отметки](#динамика-создание-отметки)
+- [Правила зависимостей между слоями](#правила-зависимостей-между-слоями)
+- [Как обновить диаграммы](#как-обновить-диаграммы)
 - [Словарь терминов](#словарь-терминов)
 
 ---
 
 ## Уровень 1: System Context
 
-**Цель уровня** — показать систему целиком и всех, кто с ней взаимодействует. Здесь система — «чёрный ящик».
+**Цель** — показать систему целиком: кто её использует и с чем она связана.
+
+![System Context](diagrams/context.svg)
 
 | Элемент | Тип | Описание |
 |---------|-----|----------|
-| User | Person | Человек, который создаёт пользователей, привычки и отметки выполнения через HTTP API |
-| Habit Tracker System | Software System | Система отслеживания привычек |
+| Клиент | Person / System | SPA, curl или Postman — отправляет HTTP-запросы с JSON |
+| Habit Tracker | Software System | Отслеживание привычек: пользователи, привычки, отметки выполнения |
+| PostgreSQL 16 | External System | Единственное хранилище данных |
 
-Пользователь отправляет HTTP-запросы (JSON) в API Gateway. Gateway проксирует их к нужному сервису. Сервисы пишут данные в PostgreSQL, а tracking-service дополнительно обращается к habit-service по HTTP.
-
-![System Context](context/context.png)
+Клиент работает только через единую точку входа — API Gateway на порту `8080`.
 
 ---
 
 ## Уровень 2: Container
 
-**Цель уровня** — разложить систему на самостоятельно запущенные процессы (контейнеры). Каждый блок можно запустить на своём сервере.
+**Цель** — разложить систему на самостоятельно запускаемые процессы.
 
-| Container | Порт | Технология | Ответственность |
+![Container](diagrams/container.svg)
+
+| Контейнер | Порт | Технологии | Ответственность |
 |-----------|------|-----------|-----------------|
-| API Gateway | 8080 | Java 17 + Javalin | Единая точка входа, проксирование, CORS, health |
-| User Service | 8081 | Java 17 + Javalin + HikariCP | Управление пользователями |
-| Habit Service | 8082 | Java 17 + Javalin + HikariCP | Управление привычками |
-| Tracking Service | 8083 | Java 17 + Javalin + HikariCP | Отметки выполнения привычек |
-| PostgreSQL | 5432 | Docker image `postgres:16` | Хранение данных |
+| api-gateway | 8080 | Spring Cloud Gateway | Маршруты `/users/**`, `/habits/**`, `/trackings/**`, CORS, таймауты |
+| user-service | 8081 | Spring Boot + jOOQ | Пользователи: создание, список, чтение по id |
+| habit-service | 8082 | Spring Boot + jOOQ + OpenFeign | Привычки; проверяет пользователя в user-service |
+| tracking-service | 8083 | Spring Boot + jOOQ + OpenFeign | Отметки выполнения; проверяет привычку в habit-service |
+| postgres | 5432 | `postgres:16` | Единая БД, схема из `db/init.sql` |
 
-**Взаимодействие сервисов:**
+Синхронные взаимодействия:
 
-- Клиент → API Gateway → сервисы: HTTP/JSON.
-- Tracking Service → Habit Service: HTTP-запрос `GET /habits/{id}` для проверки, что привычка существует. Если привычки нет — tracking-service возвращает `422`, не создавая отметку.
-- Каждый сервис держит собственный пул соединений к PostgreSQL (HikariCP).
+| Откуда | Куда | Протокол | Зачем |
+|--------|------|----------|-------|
+| Клиент | api-gateway | HTTP/JSON | Все запросы |
+| api-gateway | сервисы | HTTP | Маршрутизация по префиксу пути |
+| habit-service | user-service | Feign `GET /users/{id}` | Не создать привычку несуществующему пользователю |
+| tracking-service | habit-service | Feign `GET /habits/{id}` | Не отметить несуществующую привычку |
 
-![Container](container/container.png)
+Наружу опубликован только `8080`. Остальные контейнеры доступны лишь внутри сети `habit-network`,
+порт БД на хост не проброшен. Каждый сервис держит собственный пул HikariCP
+и отвечает на `/actuator/health`.
 
 ---
 
 ## Уровень 3: Component
 
-**Цель уровня** — показать, из чего состоит внутренний код одного сервиса.
-Ниже — структура **User Service**. У Habit Service и Tracking Service структура идентична (меняются имена сущностей, SQL и наличие HTTP-клиента).
+**Цель** — показать внутреннее устройство одного контейнера. Слои у всех сервисов одинаковые,
+меняются только сущности и адаптеры.
+
+### user-service
+
+![user-service components](diagrams/component-user.svg)
 
 | Компонент | Пакет | Задача |
 |-----------|-------|--------|
-| `UserServiceApplication` | `com.habittracker.user` | Запуск, DI-цепочка, регистрация маршрутов и обработчиков |
-| `AppConfig` | `config` | Типизированное чтение настроек из переменных окружения |
-| `Database` | `db` | Пул соединений HikariCP, health-check |
-| `User` | `domain` | Record ответа клиенту (id, name, email) |
-| `CreateUserRequest` | `domain` | Record запроса + валидация |
-| `UserRepository` | `repository` | SQL-запросы: findAll, create |
-| `UserController` | `web` | HTTP-маршруты GET/POST `/users` |
-| `ApiException` | `error` | Непроверяемое исключение с HTTP-статусом |
-| `ErrorResponse` | `error` | Единый формат ошибок: `{"error":"..."}` |
+| `UserController` | `api` | Маршруты `GET /users`, `GET /users/{id}`, `POST /users/create` |
+| `CreateUserRequest` | `api.dto` | Bean Validation: обязательные поля, формат email, длины |
+| `ApplicationExceptionHandler` | `api.error` | `@RestControllerAdvice`: доменные исключения → HTTP-статусы, формат `{"error":"..."}` |
+| `UserApplicationService` | `application` | Сценарии, `@Transactional`, маппинг в `UserResponse` |
+| `UserResponse` | `application.dto` | Модель ответа; контроллер ничего не маппит |
+| `User` | `domain.model` | Агрегат `(id, name, email)` |
+| `UserRepository` | `domain.repository` | Порт хранилища |
+| `PostgresUserRepository` | `infrastructure.persistence` | Адаптер jOOQ на сгенерированных таблицах |
 
-**Отличия Tracking Service:** дополнительно содержит компонент `HabitServiceClient` (пакет `client`), который по HTTP проверяет существование привычки в habit-service перед созданием отметки.
+### tracking-service
 
-![Component](component/component.png)
+![tracking-service components](diagrams/component-tracking.svg)
+
+| Компонент | Пакет | Задача |
+|-----------|-------|--------|
+| `TrackingController` | `api` | `GET /trackings`, `GET /trackings?habitId=`, `POST /trackings/create` |
+| `TrackingApplicationService` | `application` | Проверка даты, обращение к справочнику привычек, запись |
+| `Tracking` | `domain.model` | Агрегат `(id, habitId, completedOn)` |
+| `TrackingRepository` | `domain.repository` | Порт хранилища |
+| `HabitDirectory` | `domain.port` | Порт «существует ли привычка» — домен не знает про HTTP |
+| `PostgresTrackingRepository` | `infrastructure.persistence` | Адаптер jOOQ для `trackings` |
+| `HabitClient` + `FeignHabitDirectory` | `infrastructure.client` | Feign-клиент и его адаптер к доменному порту |
+
+`habit-service` устроен так же, только вместо `HabitDirectory` — `UserDirectory` → `UserClient` к user-service.
+
+---
+
+## Динамика: создание отметки
+
+Сценарий `POST /trackings/create` с тремя исходами: успех, несуществующая привычка, недоступный habit-service.
+
+![Sequence: create tracking](diagrams/sequence-create-tracking.svg)
+
+| Исход | Код | Что происходит |
+|-------|-----|----------------|
+| Успех | 201 | Запись в БД через jOOQ `INSERT ... RETURNING id` |
+| Привычки нет | 422 | Feign получил 404 → `HabitNotExistsException` |
+| Привычка уже отмечена сегодня | 409 | Нарушено `UNIQUE (habit_id, completed_on)` |
+| habit-service недоступен | 502 | `FeignException` → `HabitServiceUnavailableException` |
+| Дата в будущем | 400 | Доменное правило: допуск +1 день на часовые пояса |
+
+---
+
+## Правила зависимостей между слоями
+
+```text
+api  ──►  application  ──►  domain
+                              ▲
+infrastructure ───────────────┘
+```
+
+- `domain` не зависит ни от чего: ни от Spring, ни от jOOQ, ни от Feign.
+- `application` знает домен и порты, но не знает адаптеры.
+- `infrastructure` реализует порты домена (jOOQ, Feign).
+- `api` — тонкий адаптер: маршруты, валидация входа, отдача готовых DTO.
+
+Контроллеры не содержат бизнес-логики и маппинга: ими занимается `application`.
+
+---
+
+## Как обновить диаграммы
+
+Исходники лежат в `docs/architecture/diagrams/*.puml` и не требуют установки Graphviz —
+используется встроенный layout Smetana.
+
+Отрисовать в SVG после правки:
+
+```bash
+java -jar plantuml.jar -tsvg docs/architecture/diagrams
+```
+
+В VS Code удобнее расширение **PlantUML** (превью по `Alt+D`).
+Сгенерированные `.svg` коммитятся вместе с `.puml`, чтобы диаграммы отображались на GitHub.
 
 ---
 
@@ -76,9 +152,12 @@
 
 | Термин | Значение |
 |--------|----------|
-| **C4** | Методология визуализации архитектуры из 4 уровней: Code, Component, Container, Context |
+| **C4** | Методология описания архитектуры: Context → Container → Component → Code |
 | **Container** | Самостоятельно запущенный процесс (не путать с Docker-контейнером) |
-| **Component** | Логическая часть кода внутри одного контейнера (пакет/класс) |
-| **HikariCP** | Пул соединений к БД |
-| **Javalin** | Минималистичный веб-фреймворк для Java |
-| **DTO** | Data Transfer Object — модель данных для обмена между слоями |
+| **Component** | Логическая часть кода внутри контейнера (пакет/класс) |
+| **Port / Adapter** | Интерфейс в домене и его реализация в инфраструктуре |
+| **jOOQ** | Типобезопасный SQL; таблицы генерируются из `db/init.sql` на сборке |
+| **Feign** | Декларативный HTTP-клиент Spring Cloud |
+| **HikariCP** | Пул соединений к БД (автоконфигурация Boot) |
+| **Actuator** | Эндпоинты `/actuator/health`, `/actuator/info` для healthcheck'ов |
+| **DTO** | Data Transfer Object — модель обмена между слоями |

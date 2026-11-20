@@ -1,0 +1,56 @@
+@startuml container
+!pragma layout smetana
+title Habit Tracker — Containers (C4 Level 2)
+
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 12
+skinparam componentStyle rectangle
+skinparam roundCorner 12
+skinparam ArrowColor #4A6FA5
+skinparam ArrowFontColor #33506F
+skinparam rectangle {
+  BackgroundColor #FFFFFF
+  BorderColor #4A6FA5
+}
+skinparam component {
+  BackgroundColor #E8EFF8
+  BorderColor #4A6FA5
+}
+skinparam database {
+  BackgroundColor #FFF4E5
+  BorderColor #C8873A
+}
+
+actor "Клиент" as client
+
+rectangle "Docker Compose: habit-network" {
+
+  component "api-gateway\n:8080\nSpring Cloud Gateway\nмаршруты и CORS в YAML" as gw
+
+  component "user-service\n:8081\nSpring Boot + jOOQ" as user
+  component "habit-service\n:8082\nSpring Boot + jOOQ + Feign" as habit
+  component "tracking-service\n:8083\nSpring Boot + jOOQ + Feign" as tracking
+
+  database "PostgreSQL 16\n:5432" as db
+}
+
+client --> gw : "/users/**\n/habits/**\n/trackings/**"
+
+gw --> user : "HTTP"
+gw --> habit : "HTTP"
+gw --> tracking : "HTTP"
+
+habit ..> user : "Feign\nGET /users/{id}"
+tracking ..> habit : "Feign\nGET /habits/{id}"
+
+user --> db : "jOOQ"
+habit --> db : "jOOQ"
+tracking --> db : "jOOQ"
+
+note bottom of gw
+  Наружу опубликован только :8080.
+  Остальные сервисы доступны
+  только внутри сети compose.
+end note
+@enduml

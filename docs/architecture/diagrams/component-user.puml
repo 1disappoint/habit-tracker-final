@@ -1,0 +1,54 @@
+@startuml component-user
+!pragma layout smetana
+title user-service — Components (C4 Level 3)
+left to right direction
+
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 12
+skinparam componentStyle rectangle
+skinparam roundCorner 10
+skinparam ArrowColor #4A6FA5
+skinparam ArrowFontColor #33506F
+skinparam package {
+  BackgroundColor #FAFBFD
+  BorderColor #9FB3CC
+}
+skinparam component {
+  BackgroundColor #E8EFF8
+  BorderColor #4A6FA5
+}
+
+package "api" {
+  component "UserController" as controller
+  component "CreateUserRequest\n(Bean Validation)" as req
+  component "ApplicationExceptionHandler\n@RestControllerAdvice" as advice
+}
+
+package "application" {
+  component "UserApplicationService\n@Transactional" as service
+  component "UserResponse" as resp
+}
+
+package "domain" {
+  component "User\nrecord" as model
+  component "UserRepository\nпорт" as port
+  component "UserNotFoundException\nUserAlreadyExistsException" as errors
+}
+
+package "infrastructure" {
+  component "PostgresUserRepository\njOOQ" as repo
+}
+
+database "PostgreSQL\nusers" as db
+
+controller --> req
+controller --> service
+controller ..> advice
+service --> port
+service --> resp
+port <|.. repo
+repo --> db : "SQL"
+service --> model
+service ..> errors
+@enduml
